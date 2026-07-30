@@ -43,12 +43,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             <span>메인으로 돌아가기</span>
           </button>
 
-          <div className="flex items-center space-x-2">
-            <div className="w-7 h-7 rounded border border-white bg-[#b8433d] flex items-center justify-center font-serif-doc text-white font-bold text-sm">
-              結
-            </div>
-            <span className="font-serif-doc font-bold text-base text-white">기록결</span>
-          </div>
+          
         </div>
       </header>
 

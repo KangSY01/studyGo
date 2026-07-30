@@ -197,11 +197,6 @@ export default function App() {
           <p className="font-serif-doc font-bold text-sm text-[#f7f5ef]">
             기록결 (記錄結) - 고등학교 교사용 생활기록부 작성 보조 및 검증 시스템
           </p>
-          <p className="text-slate-400 text-[11px] leading-relaxed">
-            본 시스템은 선생님의 직접 관찰 사실을 규정에 부합하도록 구조화하며, 자의적 세특 창작을 하지 않습니다.
-            <br />
-            글자수 바이트 계산(한글 3B, 영문/숫자 2B, 공백 1B), NEIS 기재 금지어 스캔, 2-gram Jaccard 학급 중복도 검증을 수행합니다.
-          </p>
           <p className="text-slate-500 text-[10px] pt-1 font-mono-code">
             © 2026 기록결 (Gi-rok-gyeol). Pure Client-Side Official High School Teacher Utility.
           </p>

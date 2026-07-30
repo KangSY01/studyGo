@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   AlertCircle, 
   AlertTriangle, 
@@ -12,10 +12,15 @@ import {
   Download, 
   Edit3, 
   FileText, 
+  MessageSquare,
+  Mic,
+  MicOff,
   Plus, 
   RefreshCw, 
   RotateCcw, 
   Search, 
+  Send,
+  Sparkles,
   Trash2, 
   UserPlus, 
   Users 
@@ -62,8 +67,201 @@ export const TabSetukHelper: React.FC<TabSetukHelperProps> = ({
   const [copiedNotification, setCopiedNotification] = useState<boolean>(false);
   const [addedNotification, setAddedNotification] = useState<boolean>(false);
 
+  // AI Polish State (윤문 제안)
+  const [isPolishing, setIsPolishing] = useState<boolean>(false);
+  const [polishSuggestions, setPolishSuggestions] = useState<string[] | null>(null);
+  const [polishError, setPolishError] = useState<string | null>(null);
+
+  // AI Paraphrase State (표현 다양화 제안)
+  const [isParaphrasing, setIsParaphrasing] = useState<boolean>(false);
+  const [paraphraseSuggestions, setParaphraseSuggestions] = useState<string[] | null>(null);
+  const [paraphraseError, setParaphraseError] = useState<string | null>(null);
+
   // Search filter for roster
   const [rosterSearch, setRosterSearch] = useState<string>('');
+
+  // Mode tab state ('detailed' vs 'quick')
+  const [inputMode, setInputMode] = useState<'detailed' | 'quick'>('detailed');
+
+  // Quick Input states
+  const [quickRawText, setQuickRawText] = useState<string>('');
+  const [isListeningQuick, setIsListeningQuick] = useState<boolean>(false);
+  const [isListeningAnswerIdx, setIsListeningAnswerIdx] = useState<number | null>(null);
+  const [speechSupported, setSpeechSupported] = useState<boolean>(true);
+
+  const [isQuickAnalyzing, setIsQuickAnalyzing] = useState<boolean>(false);
+  const [quickAnalyzeError, setQuickAnalyzeError] = useState<string | null>(null);
+  const [followUpQuestions, setFollowUpQuestions] = useState<string[]>([]);
+  const [questionAnswers, setQuestionAnswers] = useState<{ [key: number]: string }>({});
+  const [previousAnalysis, setPreviousAnalysis] = useState<{
+    activityName: string;
+    observedBehavior: string;
+    competency: string;
+    growthAspect: string;
+  } | null>(null);
+
+  useEffect(() => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setSpeechSupported(false);
+    }
+  }, []);
+
+  const handleToggleMicQuick = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setSpeechSupported(false);
+      return;
+    }
+
+    if (isListeningQuick) {
+      setIsListeningQuick(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'ko-KR';
+      recognition.interimResults = false;
+      recognition.continuous = false;
+
+      recognition.onstart = () => {
+        setIsListeningQuick(true);
+      };
+
+      recognition.onresult = (event: any) => {
+        const transcript = Array.from(event.results)
+          .map((result: any) => result[0].transcript)
+          .join('');
+        setQuickRawText((prev) => (prev ? `${prev} ${transcript}` : transcript));
+      };
+
+      recognition.onerror = () => {
+        setIsListeningQuick(false);
+      };
+
+      recognition.onend = () => {
+        setIsListeningQuick(false);
+      };
+
+      recognition.start();
+    } catch (err) {
+      console.error('Speech recognition failed:', err);
+      setIsListeningQuick(false);
+    }
+  };
+
+  const handleToggleMicAnswer = (index: number) => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setSpeechSupported(false);
+      return;
+    }
+
+    if (isListeningAnswerIdx === index) {
+      setIsListeningAnswerIdx(null);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'ko-KR';
+      recognition.interimResults = false;
+      recognition.continuous = false;
+
+      recognition.onstart = () => {
+        setIsListeningAnswerIdx(index);
+      };
+
+      recognition.onresult = (event: any) => {
+        const transcript = Array.from(event.results)
+          .map((result: any) => result[0].transcript)
+          .join('');
+        setQuestionAnswers((prev) => ({
+          ...prev,
+          [index]: prev[index] ? `${prev[index]} ${transcript}` : transcript,
+        }));
+      };
+
+      recognition.onerror = () => {
+        setIsListeningAnswerIdx(null);
+      };
+
+      recognition.onend = () => {
+        setIsListeningAnswerIdx(null);
+      };
+
+      recognition.start();
+    } catch (err) {
+      console.error('Speech recognition failed for answer:', err);
+      setIsListeningAnswerIdx(null);
+    }
+  };
+
+  const handleQuickAnalyze = async (answerToQuestion?: string) => {
+    if (!quickRawText.trim() && !answerToQuestion) return;
+
+    setIsQuickAnalyzing(true);
+    setQuickAnalyzeError(null);
+
+    try {
+      const res = await fetch('/api/gemini/quick-analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rawText: quickRawText,
+          subject: effectiveSubject,
+          previousAnalysis: previousAnalysis || undefined,
+          answerToQuestion: answerToQuestion || undefined
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '빠른 입력 분석 실패');
+
+      const updatedForm: StudentInputForm = {
+        ...form,
+        taskTitle: data.activityName || form.taskTitle,
+        observedBehavior: data.observedBehavior || form.observedBehavior,
+        competency: data.competency || form.competency,
+        growthAspect: data.growthAspect || form.growthAspect
+      };
+
+      setForm(updatedForm);
+      setPreviousAnalysis({
+        activityName: data.activityName || '',
+        observedBehavior: data.observedBehavior || '',
+        competency: data.competency || '',
+        growthAspect: data.growthAspect || ''
+      });
+
+      setFollowUpQuestions(data.followUpQuestions || []);
+      setQuestionAnswers({});
+
+      // Auto verify and assemble
+      const assembled = assembleStudentRecordText({ ...updatedForm, subject: effectiveSubject });
+      setAssembledText(assembled);
+      const byteCount = calculateKoreanBytes(assembled);
+      const isByteOver = byteCount > 1500;
+      const prohibited = scanProhibitedTerms(assembled);
+      const duplicate = checkClassDuplicateSimilarity(assembled, roster, undefined, 40);
+      const isPass = !isByteOver && !prohibited.hasProhibited && !duplicate.isWarning;
+
+      setVerification({
+        status: isPass ? 'PASS' : 'REVIEW',
+        byteCount,
+        maxByteLimit: 1500,
+        isByteOver,
+        prohibited,
+        duplicate,
+        verifiedAt: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+      });
+    } catch (err: any) {
+      setQuickAnalyzeError(err.message || 'AI 분석 중 오류가 발생했습니다.');
+    } finally {
+      setIsQuickAnalyzing(false);
+    }
+  };
 
   const effectiveSubject = isCustomSubject
     ? form.customSubject || '기타 과목'
@@ -71,6 +269,12 @@ export const TabSetukHelper: React.FC<TabSetukHelperProps> = ({
 
   // Handles "정리 및 검증하기" (Structure & Verify)
   const handleVerify = () => {
+    // Reset AI suggestions when re-assembling
+    setPolishSuggestions(null);
+    setPolishError(null);
+    setParaphraseSuggestions(null);
+    setParaphraseError(null);
+
     // 1. Sentence Assembly from teacher inputs
     const assembled = assembleStudentRecordText({ ...form, subject: effectiveSubject });
     setAssembledText(assembled);
@@ -103,7 +307,7 @@ export const TabSetukHelper: React.FC<TabSetukHelperProps> = ({
     setIsEditingAssembled(false);
   };
 
-  // Re-runs verification when teacher manually edits assembled text
+  // Re-runs verification when teacher manually edits assembled text or applies suggestion
   const handleAssembledChange = (newText: string) => {
     setAssembledText(newText);
     const byteCount = calculateKoreanBytes(newText);
@@ -122,6 +326,55 @@ export const TabSetukHelper: React.FC<TabSetukHelperProps> = ({
       duplicate,
       verifiedAt: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
     });
+  };
+
+  // Fetch AI Polish Suggestions from Gemini API
+  const handleFetchPolishSuggestions = async () => {
+    if (!assembledText) return;
+    setIsPolishing(true);
+    setPolishError(null);
+    try {
+      const res = await fetch('/api/gemini/polish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: assembledText, subject: effectiveSubject })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '윤문 제안 실패');
+      setPolishSuggestions(data.suggestions || []);
+    } catch (err: any) {
+      setPolishError(err.message || 'AI 윤문 제안을 불러오지 못했습니다.');
+    } finally {
+      setIsPolishing(false);
+    }
+  };
+
+  // Fetch AI Paraphrase Suggestions from Gemini API
+  const handleFetchParaphraseSuggestions = async () => {
+    if (!assembledText) return;
+    setIsParaphrasing(true);
+    setParaphraseError(null);
+    try {
+      const res = await fetch('/api/gemini/paraphrase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: assembledText })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '표현 다양화 제안 실패');
+      setParaphraseSuggestions(data.suggestions || []);
+    } catch (err: any) {
+      setParaphraseError(err.message || 'AI 표현 다양화 제안을 불러오지 못했습니다.');
+    } finally {
+      setIsParaphrasing(false);
+    }
+  };
+
+  // Apply chosen suggestion
+  const handleApplySuggestion = (chosenText: string) => {
+    handleAssembledChange(chosenText);
+    setPolishSuggestions(null);
+    setParaphraseSuggestions(null);
   };
 
   // Adds current record to class roster
@@ -246,8 +499,36 @@ export const TabSetukHelper: React.FC<TabSetukHelperProps> = ({
 
           {/* Form Content */}
           <div className="p-5 space-y-4 bg-ruled-light">
-            {/* Subject & Achievement Level & Student Name */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Sub-tab Switcher: Detailed vs Quick Input */}
+            <div className="flex border-b border-[#c8c2b4] pb-2 bg-slate-100/80 p-1.5 rounded-lg gap-2">
+              <button
+                type="button"
+                onClick={() => setInputMode('detailed')}
+                className={`flex-1 py-2 text-xs font-serif-doc font-bold rounded-md transition-all cursor-pointer flex items-center justify-center space-x-1.5 ${
+                  inputMode === 'detailed'
+                    ? 'bg-[#1b2a4a] text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                }`}
+              >
+                <FileText className="w-4 h-4" />
+                <span>상세 입력</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setInputMode('quick')}
+                className={`flex-1 py-2 text-xs font-serif-doc font-bold rounded-md transition-all cursor-pointer flex items-center justify-center space-x-1.5 ${
+                  inputMode === 'quick'
+                    ? 'bg-[#1b2a4a] text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                }`}
+              >
+                <Sparkles className="w-4 h-4 text-amber-300" />
+                <span>빠른 입력 (AI 대화형)</span>
+              </button>
+            </div>
+
+            {/* Common Student Info Header (Subject, Level, Name) */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-white rounded border border-[#dcd7cb]">
               {/* Subject */}
               <div>
                 <label className="block text-xs font-serif-doc font-bold text-[#1b2a4a] mb-1">
@@ -330,73 +611,319 @@ export const TabSetukHelper: React.FC<TabSetukHelperProps> = ({
               </div>
             </div>
 
-            {/* Task Title */}
-            <div>
-              <label className="block text-xs font-serif-doc font-bold text-[#1b2a4a] mb-1">
-                활동 / 과제명
-              </label>
-              <input
-                type="text"
-                value={form.taskTitle}
-                onChange={(e) => setForm({ ...form, taskTitle: e.target.value })}
-                placeholder="예: 기후 변화와 이산화탄소 배출에 관한 탐구 보고서 작성"
-                className="w-full text-xs p-2 border border-[#c8c2b4] rounded bg-white focus:ring-1 focus:ring-[#1b2a4a] focus:outline-none"
-              />
-            </div>
+            {inputMode === 'detailed' ? (
+              /* --- DETAILED INPUT MODE --- */
+              <div className="space-y-4 pt-1">
+                {/* Task Title */}
+                <div>
+                  <label className="block text-xs font-serif-doc font-bold text-[#1b2a4a] mb-1">
+                    활동 / 과제명
+                  </label>
+                  <input
+                    type="text"
+                    value={form.taskTitle}
+                    onChange={(e) => setForm({ ...form, taskTitle: e.target.value })}
+                    placeholder="예: 기후 변화와 이산화탄소 배출에 관한 탐구 보고서 작성"
+                    className="w-full text-xs p-2 border border-[#c8c2b4] rounded bg-white focus:ring-1 focus:ring-[#1b2a4a] focus:outline-none"
+                  />
+                </div>
 
-            {/* Observed Behavior */}
-            <div>
-              <label className="block text-xs font-serif-doc font-bold text-[#1b2a4a] mb-1">
-                구체적으로 관찰한 행동 <span className="text-rose-600">*</span>
-              </label>
-              <textarea
-                rows={3}
-                value={form.observedBehavior}
-                onChange={(e) => setForm({ ...form, observedBehavior: e.target.value })}
-                placeholder="선생님께서 직접 관찰하신 사실에 기반하여 개별적 행동을 입력해 주세요. (예: 데이터 수집 후 시각화 그래프 구현 및 상관관계 분석함)"
-                className="w-full text-xs p-2.5 border border-[#c8c2b4] rounded bg-white focus:ring-1 focus:ring-[#1b2a4a] focus:outline-none leading-relaxed"
-              />
-            </div>
+                {/* Observed Behavior */}
+                <div>
+                  <label className="block text-xs font-serif-doc font-bold text-[#1b2a4a] mb-1">
+                    구체적으로 관찰한 행동 <span className="text-rose-600">*</span>
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={form.observedBehavior}
+                    onChange={(e) => setForm({ ...form, observedBehavior: e.target.value })}
+                    placeholder="선생님께서 직접 관찰하신 사실에 기반하여 개별적 행동을 입력해 주세요. (예: 데이터 수집 후 시각화 그래프 구현 및 상관관계 분석함)"
+                    className="w-full text-xs p-2.5 border border-[#c8c2b4] rounded bg-white focus:ring-1 focus:ring-[#1b2a4a] focus:outline-none leading-relaxed"
+                  />
+                </div>
 
-            {/* Competency */}
-            <div>
-              <label className="block text-xs font-serif-doc font-bold text-[#1b2a4a] mb-1">
-                드러난 역량
-              </label>
-              <input
-                type="text"
-                value={form.competency}
-                onChange={(e) => setForm({ ...form, competency: e.target.value })}
-                placeholder="예: 비판적 사고력 및 데이터 분석 역량"
-                className="w-full text-xs p-2 border border-[#c8c2b4] rounded bg-white focus:ring-1 focus:ring-[#1b2a4a] focus:outline-none"
-              />
-            </div>
+                {/* Competency */}
+                <div>
+                  <label className="block text-xs font-serif-doc font-bold text-[#1b2a4a] mb-1">
+                    드러난 역량
+                  </label>
+                  <input
+                    type="text"
+                    value={form.competency}
+                    onChange={(e) => setForm({ ...form, competency: e.target.value })}
+                    placeholder="예: 비판적 사고력 및 데이터 분석 역량"
+                    className="w-full text-xs p-2 border border-[#c8c2b4] rounded bg-white focus:ring-1 focus:ring-[#1b2a4a] focus:outline-none"
+                  />
+                </div>
 
-            {/* Growth & Change */}
-            <div>
-              <label className="block text-xs font-serif-doc font-bold text-[#1b2a4a] mb-1">
-                성장 / 변화 모습
-              </label>
-              <textarea
-                rows={2}
-                value={form.growthAspect}
-                onChange={(e) => setForm({ ...form, growthAspect: e.target.value })}
-                placeholder="수행 과정에서의 태도 변화, 깊어진 사고 또는 보완 노력 등을 입력해 주세요."
-                className="w-full text-xs p-2.5 border border-[#c8c2b4] rounded bg-white focus:ring-1 focus:ring-[#1b2a4a] focus:outline-none leading-relaxed"
-              />
-            </div>
+                {/* Growth & Change */}
+                <div>
+                  <label className="block text-xs font-serif-doc font-bold text-[#1b2a4a] mb-1">
+                    성장 / 변화 모습
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={form.growthAspect}
+                    onChange={(e) => setForm({ ...form, growthAspect: e.target.value })}
+                    placeholder="수행 과정에서의 태도 변화, 깊어진 사고 또는 보완 노력 등을 입력해 주세요."
+                    className="w-full text-xs p-2.5 border border-[#c8c2b4] rounded bg-white focus:ring-1 focus:ring-[#1b2a4a] focus:outline-none leading-relaxed"
+                  />
+                </div>
 
-            {/* Submit Button */}
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={handleVerify}
-                className="w-full py-3 px-4 rounded bg-[#1b2a4a] hover:bg-[#283d6a] text-white font-serif-doc font-bold text-sm shadow-sm flex items-center justify-center space-x-2 transition-all cursor-pointer"
-              >
-                <CheckCircle className="w-4 h-4 text-emerald-400" />
-                <span>관찰 내용 정리 및 규정 검증하기 (정리하기)</span>
-              </button>
-            </div>
+                {/* Submit Button */}
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={handleVerify}
+                    className="w-full py-3 px-4 rounded bg-[#1b2a4a] hover:bg-[#283d6a] text-white font-serif-doc font-bold text-sm shadow-sm flex items-center justify-center space-x-2 transition-all cursor-pointer"
+                  >
+                    <CheckCircle className="w-4 h-4 text-emerald-400" />
+                    <span>관찰 내용 정리 및 규정 검증하기 (정리하기)</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* --- QUICK CONVERSATIONAL INPUT MODE --- */
+              <div className="space-y-4 pt-1 animate-fadeIn">
+                {/* Disclaimer Banner */}
+                <div className="p-3 rounded-md bg-amber-50/90 border border-amber-300 text-xs text-amber-900 flex items-start space-x-2">
+                  <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <p className="leading-relaxed text-[11px] font-serif-doc">
+                    ✨ AI는 선생님이 입력한 내용을 항목별로 정리하고, 부족한 부분은 질문으로 되물을 뿐 새로운 내용을 만들지 않습니다.
+                  </p>
+                </div>
+
+                {/* Step 1: Free Text Input with Speech Mic Button */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-serif-doc font-bold text-[#1b2a4a]">
+                      1단계: 자유 입력 (텍스트 또는 음성 입력) <span className="text-rose-600">*</span>
+                    </label>
+
+                    {/* Microphone Toggle Button */}
+                    <button
+                      type="button"
+                      onClick={handleToggleMicQuick}
+                      disabled={!speechSupported}
+                      title={
+                        speechSupported
+                          ? '음성 입력 시작/중지'
+                          : '이 브라우저는 음성 입력을 지원하지 않습니다. 직접 입력해주세요'
+                      }
+                      className={`px-2.5 py-1 text-xs rounded-full font-serif-doc font-bold flex items-center space-x-1.5 transition-all cursor-pointer border ${
+                        !speechSupported
+                          ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                          : isListeningQuick
+                          ? 'bg-rose-600 text-white border-rose-700 animate-pulse shadow-sm'
+                          : 'bg-white text-[#1b2a4a] border-[#c8c2b4] hover:bg-slate-100'
+                      }`}
+                    >
+                      {isListeningQuick ? (
+                        <>
+                          <Mic className="w-3.5 h-3.5 animate-bounce" />
+                          <span>음성 인식 중... (말씀하세요)</span>
+                        </>
+                      ) : (
+                        <>
+                          {speechSupported ? <Mic className="w-3.5 h-3.5 text-rose-600" /> : <MicOff className="w-3.5 h-3.5 text-slate-400" />}
+                          <span>{speechSupported ? '음성 입력' : '음성 미지원'}</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {!speechSupported && (
+                    <p className="text-[11px] text-amber-800 bg-amber-50/70 px-2.5 py-1 rounded border border-amber-200">
+                      ⚠️ 이 브라우저는 음성 입력을 지원하지 않습니다. 직접 입력해주세요.
+                    </p>
+                  )}
+
+                  <div className="relative">
+                    <textarea
+                      rows={4}
+                      value={quickRawText}
+                      onChange={(e) => setQuickRawText(e.target.value)}
+                      placeholder="학생에 대해 자유롭게 짧게 적어주세요. (예: 김철수 학생은 이번 사회 시간에 자원 배분 논술 활동에서 수치 데이터를 모아 상관관계를 시각화 그래프로 정교하게 분석하고 발표했음...)"
+                      className="w-full text-xs p-3 border border-[#c8c2b4] rounded bg-white focus:ring-1 focus:ring-[#1b2a4a] focus:outline-none leading-relaxed"
+                    />
+                  </div>
+                </div>
+
+                {/* Step 2: Gemini Analysis Button */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickAnalyze()}
+                    disabled={isQuickAnalyzing || !quickRawText.trim()}
+                    className="w-full py-3 px-4 rounded bg-[#1b2a4a] hover:bg-[#283d6a] text-white font-serif-doc font-bold text-xs shadow-sm flex items-center justify-center space-x-2 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {isQuickAnalyzing ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 text-amber-300 animate-spin" />
+                        <span>Gemini AI가 자유 메모를 항목별로 분석 중...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 text-amber-300" />
+                        <span>자유 메모 분석하기 (AI 항목 자동 분류)</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {quickAnalyzeError && (
+                  <div className="p-2.5 rounded bg-rose-50 border border-rose-200 text-xs text-rose-700">
+                    {quickAnalyzeError}
+                  </div>
+                )}
+
+                {/* Step 3: Follow-up Questions Speech Bubbles */}
+                {followUpQuestions.length > 0 && (
+                  <div className="p-3.5 rounded-lg bg-blue-50/90 border border-blue-200 space-y-3">
+                    <div className="flex items-center space-x-2 border-b border-blue-200 pb-2">
+                      <MessageSquare className="w-4 h-4 text-[#1b2a4a]" />
+                      <span className="font-serif-doc font-bold text-xs text-[#1b2a4a]">
+                        Gemini AI 추가 질문 (부족한 내용 구체화)
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-slate-600">
+                      입력된 메모에서 일부 항목의 사실 관계가 모호합니다. 아래 질문에 짧게 답변해 주시면 항목을 더욱 정교하게 채워드립니다.
+                    </p>
+
+                    <div className="space-y-3">
+                      {followUpQuestions.map((q, idx) => (
+                        <div key={idx} className="bg-white p-3 rounded-md border border-blue-200 space-y-2 shadow-2xs">
+                          <div className="flex items-start space-x-2 text-xs font-bold text-slate-800">
+                            <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-900 text-[10px] font-mono-code shrink-0 mt-0.5">
+                              질문 {idx + 1}
+                            </span>
+                            <p className="leading-snug text-slate-800 font-sans">{q}</p>
+                          </div>
+
+                          <div className="flex items-center space-x-1.5">
+                            <input
+                              type="text"
+                              value={questionAnswers[idx] || ''}
+                              onChange={(e) => setQuestionAnswers({ ...questionAnswers, [idx]: e.target.value })}
+                              placeholder="답변 입력 (예: 발표 전달력과 그래프 설명 방식이 매우 정교했음)"
+                              className="flex-1 text-xs p-2 border border-[#c8c2b4] rounded bg-slate-50 focus:bg-white focus:ring-1 focus:ring-[#1b2a4a] focus:outline-none"
+                            />
+
+                            <button
+                              type="button"
+                              onClick={() => handleToggleMicAnswer(idx)}
+                              disabled={!speechSupported}
+                              title={speechSupported ? "음성으로 답변하기" : "이 브라우저는 음성 입력을 지원하지 않습니다."}
+                              className={`p-2 rounded transition-colors cursor-pointer border ${
+                                !speechSupported
+                                  ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                                  : isListeningAnswerIdx === idx
+                                  ? 'bg-rose-600 text-white border-rose-700 animate-pulse'
+                                  : 'bg-white text-slate-700 border-[#c8c2b4] hover:bg-slate-100'
+                              }`}
+                            >
+                              <Mic className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const ansText = Object.values(questionAnswers).filter(Boolean).join('\n');
+                        handleQuickAnalyze(ansText);
+                      }}
+                      disabled={isQuickAnalyzing || Object.values(questionAnswers).filter(Boolean).length === 0}
+                      className="w-full py-2.5 px-3 rounded bg-[#b8433d] hover:bg-[#a23832] text-white font-serif-doc font-bold text-xs flex items-center justify-center space-x-1.5 transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>답변 반영하기 (AI 항목 업데이트)</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* Step 3: Extracted Fields Preview & Direct Edit */}
+                {previousAnalysis && (
+                  <div className="p-3.5 rounded-lg bg-white border border-[#dcd7cb] space-y-3">
+                    <div className="flex items-center justify-between border-b border-[#e5e0d3] pb-2">
+                      <span className="font-serif-doc font-bold text-xs text-[#1b2a4a] flex items-center space-x-1.5">
+                        <CheckCircle className="w-4 h-4 text-emerald-600" />
+                        <span>AI가 항목별로 정리한 내용 (상세 입력과 연동)</span>
+                      </span>
+                      <span className="text-[11px] text-slate-500">
+                        필요시 직접 수정하실 수 있습니다.
+                      </span>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-[11px] font-serif-doc font-bold text-[#1b2a4a] mb-1">
+                          활동 / 과제명
+                        </label>
+                        <input
+                          type="text"
+                          value={form.taskTitle}
+                          onChange={(e) => setForm({ ...form, taskTitle: e.target.value })}
+                          className="w-full text-xs p-2 border border-[#c8c2b4] rounded bg-white focus:ring-1 focus:ring-[#1b2a4a] focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-serif-doc font-bold text-[#1b2a4a] mb-1">
+                          구체적으로 관찰한 행동
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={form.observedBehavior}
+                          onChange={(e) => setForm({ ...form, observedBehavior: e.target.value })}
+                          className="w-full text-xs p-2 border border-[#c8c2b4] rounded bg-white focus:ring-1 focus:ring-[#1b2a4a] focus:outline-none leading-relaxed"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-serif-doc font-bold text-[#1b2a4a] mb-1">
+                            드러난 역량
+                          </label>
+                          <input
+                            type="text"
+                            value={form.competency}
+                            onChange={(e) => setForm({ ...form, competency: e.target.value })}
+                            className="w-full text-xs p-2 border border-[#c8c2b4] rounded bg-white focus:ring-1 focus:ring-[#1b2a4a] focus:outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-serif-doc font-bold text-[#1b2a4a] mb-1">
+                            성장 / 변화 모습
+                          </label>
+                          <input
+                            type="text"
+                            value={form.growthAspect}
+                            onChange={(e) => setForm({ ...form, growthAspect: e.target.value })}
+                            className="w-full text-xs p-2 border border-[#c8c2b4] rounded bg-white focus:ring-1 focus:ring-[#1b2a4a] focus:outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="pt-1">
+                        <button
+                          type="button"
+                          onClick={handleVerify}
+                          className="w-full py-2.5 px-4 rounded bg-[#1b2a4a] hover:bg-[#283d6a] text-white font-serif-doc font-bold text-xs shadow-sm flex items-center justify-center space-x-2 transition-all cursor-pointer"
+                        >
+                          <CheckCircle className="w-4 h-4 text-emerald-400" />
+                          <span>관찰 내용 정리 및 규정 검증하기 (정리하기)</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -453,6 +980,78 @@ export const TabSetukHelper: React.FC<TabSetukHelperProps> = ({
                     <p className="text-xs text-[#1b2a4a] leading-relaxed font-sans whitespace-pre-wrap select-text">
                       {assembledText}
                     </p>
+                  )}
+
+                  {/* AI Polish Button & Instruction Disclaimer */}
+                  <div className="mt-3 pt-3 border-t border-[#d8e5d2] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <button
+                      onClick={handleFetchPolishSuggestions}
+                      disabled={isPolishing}
+                      className="px-3 py-1.5 rounded bg-[#1b2a4a] hover:bg-[#283e6b] text-white font-serif-doc font-bold text-xs flex items-center justify-center space-x-1.5 transition-all cursor-pointer shadow-2xs disabled:opacity-50"
+                    >
+                      {isPolishing ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-300" />
+                          <span>Gemini AI 표현 다듬는 중...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                          <span>AI 윤문 제안 보기</span>
+                        </>
+                      )}
+                    </button>
+
+                    <span className="text-[11px] text-slate-600 font-serif-doc">
+                      ✨ AI는 표현만 다듬으며, 사실 내용을 추가하지 않습니다.
+                    </span>
+                  </div>
+
+                  {polishError && (
+                    <div className="mt-2 text-xs text-rose-700 bg-rose-50 p-2 rounded border border-rose-200">
+                      {polishError}
+                    </div>
+                  )}
+
+                  {/* Render Polish Suggestions */}
+                  {polishSuggestions && polishSuggestions.length > 0 && (
+                    <div className="mt-4 p-3 rounded-md bg-amber-50/90 border border-amber-300 space-y-3 animate-fadeIn">
+                      <div className="flex items-center justify-between text-xs font-bold text-[#1b2a4a] border-b border-amber-200 pb-1.5">
+                        <span className="flex items-center space-x-1">
+                          <Sparkles className="w-4 h-4 text-amber-600" />
+                          <span>AI 윤문 제안 (표현 다듬기 2안)</span>
+                        </span>
+                        <button
+                          onClick={() => setPolishSuggestions(null)}
+                          className="text-[11px] text-slate-500 hover:text-slate-700 underline cursor-pointer"
+                        >
+                          닫기
+                        </button>
+                      </div>
+
+                      <div className="space-y-2.5">
+                        {polishSuggestions.map((suggestion, index) => (
+                          <div
+                            key={index}
+                            className="p-2.5 rounded bg-white border border-amber-200 text-xs text-slate-800 space-y-2 hover:border-[#1b2a4a] transition-all"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 font-serif-doc font-bold text-[10px]">
+                                제안 대안 {index + 1}
+                              </span>
+                              <button
+                                onClick={() => handleApplySuggestion(suggestion)}
+                                className="px-2 py-1 rounded bg-[#b8433d] hover:bg-[#a23832] text-white font-bold text-[11px] font-serif-doc transition-colors cursor-pointer flex items-center space-x-1"
+                              >
+                                <CheckCircle className="w-3 h-3" />
+                                <span>이 표현 사용하기</span>
+                              </button>
+                            </div>
+                            <p className="leading-relaxed font-sans">{suggestion}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
 
@@ -524,15 +1123,67 @@ export const TabSetukHelper: React.FC<TabSetukHelperProps> = ({
                     </div>
 
                     {verification.duplicate.isWarning ? (
-                      <div className="p-2 rounded bg-rose-50 border border-rose-200 text-xs text-rose-800">
+                      <div className="p-2.5 rounded bg-rose-50 border border-rose-200 text-xs text-rose-800 space-y-2">
                         <p className="font-semibold flex items-center space-x-1">
                           <AlertTriangle className="w-3.5 h-3.5" />
                           <span>학급 명단과 유사도 40% 이상 감지!</span>
                         </p>
-                        <p className="mt-0.5 text-[11px]">
+                        <p className="text-[11px]">
                           <strong>[{verification.duplicate.targetStudentName}]</strong> 학생의 세특 기록과{' '}
-                          <strong className="font-mono-code text-rose-900">{verification.duplicate.similarityPercentage}%</strong> 유사합니다. 개별 관찰 표현을 추가로 보충해 주세요.
+                          <strong className="font-mono-code text-rose-900">{verification.duplicate.similarityPercentage}%</strong> 유사합니다.
                         </p>
+
+                        {/* Paraphrase AI Button */}
+                        <div className="pt-1">
+                          <button
+                            onClick={handleFetchParaphraseSuggestions}
+                            disabled={isParaphrasing}
+                            className="px-2.5 py-1.5 rounded bg-rose-700 hover:bg-rose-800 text-white font-serif-doc font-bold text-xs flex items-center space-x-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                          >
+                            {isParaphrasing ? (
+                              <>
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                <span>Gemini AI 표현 다양화 중...</span>
+                              </>
+                            ) : (
+                              <>
+                                <RefreshCw className="w-3.5 h-3.5" />
+                                <span>다른 표현으로 바꾸기 (AI 중복 회피)</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+
+                        {paraphraseError && (
+                          <p className="text-[11px] text-rose-800 mt-1">{paraphraseError}</p>
+                        )}
+
+                        {/* Render Paraphrase Suggestions */}
+                        {paraphraseSuggestions && paraphraseSuggestions.length > 0 && (
+                          <div className="mt-2 p-2.5 rounded bg-white border border-rose-300 space-y-2">
+                            <div className="text-[11px] font-bold text-rose-900 border-b border-rose-200 pb-1 flex items-center justify-between">
+                              <span>Gemini AI 중복 회피 표현 대안</span>
+                              <button
+                                onClick={() => setParaphraseSuggestions(null)}
+                                className="text-[10px] text-slate-500 hover:underline cursor-pointer"
+                              >
+                                닫기
+                              </button>
+                            </div>
+                            {paraphraseSuggestions.map((suggestion, idx) => (
+                              <div key={idx} className="p-2 rounded bg-rose-50/50 border border-rose-200 text-xs space-y-1.5">
+                                <p className="text-slate-800 font-sans leading-relaxed">{suggestion}</p>
+                                <button
+                                  onClick={() => handleApplySuggestion(suggestion)}
+                                  className="px-2 py-0.5 rounded bg-rose-700 hover:bg-rose-800 text-white font-bold text-[10px] font-serif-doc cursor-pointer flex items-center space-x-1"
+                                >
+                                  <CheckCircle className="w-3 h-3" />
+                                  <span>이 표현 사용하기</span>
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <p className="text-[11px] text-slate-500">

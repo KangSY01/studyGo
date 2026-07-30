@@ -12,6 +12,7 @@ import {
   FileCheck, 
   FileText, 
   Printer, 
+  RefreshCw,
   RotateCcw, 
   Sparkles, 
   Table 
@@ -32,11 +33,89 @@ export const TabRubricGenerator: React.FC = () => {
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [copiedNotification, setCopiedNotification] = useState<boolean>(false);
 
-  // Generate Rubric and Assessment Plan
-  const handleGenerate = () => {
-    const plan = generateRubricAndItemPlan(subject, achievementStandard, method, maxScore);
-    setAssessmentPlan(plan);
-    setIsEditing(false);
+  // Gemini API Loading & Error states
+  const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
+
+  // Generate Rubric and Assessment Plan using Gemini API
+  const handleGenerate = async () => {
+    if (!achievementStandard.trim()) return;
+
+    setIsGenerating(true);
+    setGenerateError(null);
+
+    const safeScore = Math.max(10, Math.min(100, maxScore || 20));
+    const highMin = Math.round(safeScore * 0.85);
+    const highMax = safeScore;
+    const medMin = Math.round(safeScore * 0.60);
+    const medMax = Math.max(medMin, highMin - 1);
+    const lowMin = 0;
+    const lowMax = Math.max(0, medMin - 1);
+
+    try {
+      const res = await fetch('/api/gemini/rubric', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject,
+          achievementStandard,
+          method,
+          maxScore: safeScore
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Rubric 생성 실패');
+
+      const plan: AssessmentPlan = {
+        id: `plan-${Date.now()}`,
+        subject,
+        achievementStandard,
+        method,
+        maxScore: safeScore,
+        itemTitle: data.itemTitle || `[수행평가 문항] ${subject} 성취기준 연계 ${method}`,
+        itemDescription: data.itemDescription || '상세 지시사항이 생성되었습니다.',
+        rubric: [
+          {
+            level: '상',
+            scoreRangeText: `${highMin}점 ~ ${highMax}점`,
+            minScore: highMin,
+            maxScore: highMax,
+            percentRangeText: '85% ~ 100%',
+            criteria: data.rubricCriteria?.high || '성취기준의 핵심 개념을 완벽히 이해하고 논리적 근거를 명확히 제시함.'
+          },
+          {
+            level: '중',
+            scoreRangeText: `${medMin}점 ~ ${medMax}점`,
+            minScore: medMin,
+            maxScore: medMax,
+            percentRangeText: '60% ~ 84%',
+            criteria: data.rubricCriteria?.med || '성취기준의 주요 내용을 이해하였으나 일부 근거의 타당성이 부족함.'
+          },
+          {
+            level: '하',
+            scoreRangeText: `${lowMin}점 ~ ${lowMax}점`,
+            minScore: lowMin,
+            maxScore: lowMax,
+            percentRangeText: '0% ~ 59%',
+            criteria: data.rubricCriteria?.low || '성취기준에 대한 이해가 낮거나 근거 제시가 미흡함.'
+          }
+        ],
+        createdAt: new Date().toISOString()
+      };
+
+      setAssessmentPlan(plan);
+      setIsEditing(false);
+    } catch (err: any) {
+      console.warn('Gemini API fallback to template generator:', err);
+      // Fallback gracefully to template generator
+      const fallbackPlan = generateRubricAndItemPlan(subject, achievementStandard, method, maxScore);
+      setAssessmentPlan(fallbackPlan);
+      setIsEditing(false);
+      setGenerateError('Gemini API 호출 중 오류가 발생하여 기본 템플릿으로 생성되었습니다.');
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   // Load Preset Achievement Standard
@@ -193,15 +272,31 @@ export const TabRubricGenerator: React.FC = () => {
           </div>
 
           {/* Submit Action */}
-          <div className="pt-2">
+          <div className="pt-2 space-y-2">
             <button
               type="button"
               onClick={handleGenerate}
-              className="w-full py-3 px-4 rounded bg-[#1b2a4a] hover:bg-[#283d6a] text-white font-serif-doc font-bold text-sm shadow-sm flex items-center justify-center space-x-2 transition-all cursor-pointer"
+              disabled={isGenerating}
+              className="w-full py-3 px-4 rounded bg-[#1b2a4a] hover:bg-[#283d6a] text-white font-serif-doc font-bold text-sm shadow-sm flex items-center justify-center space-x-2 transition-all cursor-pointer disabled:opacity-50"
             >
-              <Sparkles className="w-4 h-4 text-amber-300" />
-              <span>수행평가 문항 예시 및 3단계 Rubric 생성하기</span>
+              {isGenerating ? (
+                <>
+                  <RefreshCw className="w-4 h-4 text-amber-300 animate-spin" />
+                  <span>Gemini AI가 성취기준 맞춤 문항 및 Rubric 생성 중...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4 text-amber-300" />
+                  <span>AI 성취기준 맞춤 수행평가 문항 및 3단계 Rubric 생성하기</span>
+                </>
+              )}
             </button>
+
+            {generateError && (
+              <p className="text-xs text-amber-800 bg-amber-50 p-2 rounded border border-amber-200">
+                ⚠️ {generateError}
+              </p>
+            )}
           </div>
         </div>
       </div>

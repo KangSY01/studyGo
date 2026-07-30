@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { AlertTriangle, CheckCircle2, FileText, Info, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, FileText, Info, Sparkles, X } from 'lucide-react';
 import { OFFICIAL_PROHIBITED_TERMS } from '../utils/textAnalysis';
 
 interface RuleGuideModalProps {
@@ -89,6 +89,45 @@ export const RuleGuideModal: React.FC<RuleGuideModalProps> = ({ isOpen, onClose 
             <p className="text-xs text-slate-600 leading-relaxed">
               동일 학급 학생들에게 일률적으로 동일한 세특 문장을 기재하는 행위는 교육청 시정 조치 대상입니다. 기록결은 <strong>2-gram Jaccard 유사도 알고리즘</strong>을 적용하여 40% 이상의 유사 문장이 감지되면 '검토 필요' 경고를 발생시킵니다.
             </p>
+          </section>
+
+          {/* 4. AI (Gemini API) Transparency & Capabilities */}
+          <section className="bg-white p-4 rounded border border-[#dcd7cb]">
+            <h3 className="font-serif-doc font-bold text-base text-[#1b2a4a] flex items-center space-x-2 border-b border-[#e5e0d3] pb-2 mb-2">
+              <Sparkles className="w-4 h-4 text-amber-600" />
+              <span>4. AI (Gemini API) 활용 투명성 및 서술 원칙</span>
+            </h3>
+            <p className="text-xs text-slate-600 leading-relaxed mb-3">
+              '기록결'은 AI가 학생의 사실을 무단으로 창작하지 않으며, 선생님이 직접 입력한 관찰 기록에 기반한 정교화 작업에만 서버측 Gemini API를 호출합니다.
+            </p>
+            <div className="space-y-2 text-xs">
+              <div className="p-2.5 rounded bg-ruled-light border border-[#d8e5d2] space-y-1">
+                <div className="font-bold text-[#1b2a4a] flex items-center space-x-1">
+                  <span>• 세특 윤문 제안 (Gemini API)</span>
+                </div>
+                <p className="text-slate-600 text-[11px] leading-relaxed">
+                  조립된 사실 문장의 표현과 어휘를 격식 있게 다듬어 2개 대안을 제시합니다. <strong>(사실 내용 추가 금지 원칙)</strong>
+                </p>
+              </div>
+
+              <div className="p-2.5 rounded bg-ruled-light border border-[#d8e5d2] space-y-1">
+                <div className="font-bold text-[#1b2a4a] flex items-center space-x-1">
+                  <span>• 표현 다양화 제안 (Gemini API)</span>
+                </div>
+                <p className="text-slate-600 text-[11px] leading-relaxed">
+                  유사도 40% 이상 경고 시, 원래 관찰 의미를 유지하면서 어순과 유의어를 활용해 중복률을 낮추는 문장 대안을 생성합니다.
+                </p>
+              </div>
+
+              <div className="p-2.5 rounded bg-ruled-light border border-[#d8e5d2] space-y-1">
+                <div className="font-bold text-[#1b2a4a] flex items-center space-x-1">
+                  <span>• 수행평가 문항 및 3단계 Rubric 생성 (Gemini API)</span>
+                </div>
+                <p className="text-slate-600 text-[11px] leading-relaxed">
+                  입력된 성취기준 텍스트를 정밀 분석하여 맞춤형 문항 지시사항과 상/중/하 3단계 채점기준표를 자동 구성합니다.
+                </p>
+              </div>
+            </div>
           </section>
         </div>
 

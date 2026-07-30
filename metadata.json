@@ -1,6 +1,6 @@
 {
   "name": "기록결",
   "description": "한국 고등학교 교사를 위한 세특 작성 보조 및 기재 금지어·글자수·중복 검증, 수행평가 Rubric 생성 도구",
-  "requestFramePermissions": [],
+  "requestFramePermissions": ["microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
