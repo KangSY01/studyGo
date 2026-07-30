@@ -3,6 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+export type ViewState = 'landing' | 'login' | 'dashboard' | 'setuk' | 'rubric' | 'roster';
+
+export interface TeacherProfile {
+  name: string;
+  school: string;
+  email: string;
+}
+
 export type SubjectOption = '공통국어1' | '공통수학1' | '공통영어1' | '통합사회' | '통합과학' | string;
 
 export type AchievementLevel = '상' | '중' | '하';

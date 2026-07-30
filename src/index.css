@@ -3,7 +3,7 @@
 @layer base {
   body {
     font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background-color: #f7f5ef;
+    background-color: #EDF3EA;
     color: #1b2a4a;
   }
 
@@ -16,22 +16,23 @@
   }
 }
 
-/* Background paper texture & ruled lines */
+/* Background paper texture & ruled lines - Green Bar Ledger Paper */
 .bg-ruled-paper {
-  background-color: #f7f5ef;
-  background-image: linear-gradient(to bottom, #e7e2d4 1px, transparent 1px);
+  background-color: #EDF3EA;
+  background-image: linear-gradient(to bottom, #d2e0cb 1px, transparent 1px);
   background-size: 100% 32px;
 }
 
 .bg-ruled-light {
-  background-image: linear-gradient(to bottom, #eae6da 1px, transparent 1px);
+  background-color: #f4f8f3;
+  background-image: linear-gradient(to bottom, #d8e5d2 1px, transparent 1px);
   background-size: 100% 28px;
 }
 
-/* Official Document Card Styling */
+/* Official Document Card Styling - Kept pure white as requested */
 .doc-card {
   background-color: #ffffff;
-  border: 1px solid #dcd7cb;
+  border: 1px solid #c8d8c3;
   box-shadow: 0 2px 10px rgba(27, 42, 74, 0.04);
 }
 
