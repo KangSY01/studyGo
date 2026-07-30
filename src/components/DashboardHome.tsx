@@ -38,9 +38,9 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({
   return (
     <div className="space-y-8 animate-fadeIn">
       {/* Welcome Banner */}
-      <div className="doc-card rounded-lg p-6 bg-white border border-[#dcd7cb] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="doc-card rounded-lg p-6 bg-white border border-[#c8d8c3] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded bg-[#f0ebd9] text-[#1b2a4a] text-xs font-bold font-serif-doc mb-2">
+          <div className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded bg-[#e2eee0] text-[#1b2a4a] text-xs font-bold font-serif-doc mb-2 border border-[#b2cca8]">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
             <span>선생님 전용 안심 대시보드</span>
           </div>

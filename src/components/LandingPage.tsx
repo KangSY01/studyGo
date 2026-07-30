@@ -38,9 +38,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <span className="text-xl sm:text-2xl font-black font-serif-doc tracking-tight text-[#f7f5ef]">
                 기록결 <span className="text-xs text-slate-300 font-sans font-normal">(記錄結)</span>
               </span>
-              <p className="text-[11px] text-[#d4cebd] hidden sm:block">
-                고등학교 교사 세특 작성 보조 및 규정 검증 서비스
-              </p>
             </div>
           </div>
 
@@ -67,10 +64,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <h1 className="text-2xl sm:text-4xl lg:text-5xl font-black font-serif-doc tracking-tight text-[#1b2a4a] leading-tight max-w-4xl mx-auto">
           AI가 대신 쓰지 않습니다. <span className="text-[#b8433d] underline decoration-[#1b2a4a]/20 underline-offset-8">선생님의 관찰 사실</span>을 안전하게 검증합니다.
         </h1>
-
-        <p className="text-xs sm:text-sm text-slate-700 max-w-2xl mx-auto leading-relaxed font-sans">
-          고등학교 교사 세특 작성 보조 및 NEIS 글자수·금지어·유사도 규정 자동 검증 서비스
-        </p>
 
         {/* CTA Button */}
         <div className="flex items-center justify-center pt-2">
